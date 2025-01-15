@@ -33,7 +33,6 @@ class LoginSerializer(serializers.ModelSerializer):
 
 class TeamSerializer(serializers.ModelSerializer):
     members = UserSerializer(many=True, read_only=True)
-    roles = serializers.CharField()
     class Meta:
         model = Team
         fields = '__all__'

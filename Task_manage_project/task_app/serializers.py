@@ -1,5 +1,5 @@
 from  rest_framework import serializers
-from .models import Task, Team, Role
+from .models import Task, Team, Role, TeamMembership
 from django.contrib.auth.models import User
 from django.contrib.auth import get_user_model
 
@@ -41,9 +41,13 @@ class TaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = Task
         fields = '__all__'
-
 class RoleSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
     class Meta:
         model = Role
+        fields = '__all__'
+
+class TeamMemberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TeamMembership
         fields = '__all__'

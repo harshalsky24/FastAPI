@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Task,Team,Role
+from .models import Task,Team,Role,TeamMembership
 
 # Register your models here.
 # @admin.register(User)
@@ -16,4 +16,8 @@ class TeamAdmin(admin.ModelAdmin):
 
 @admin.register(Role)
 class RoleAdmin(admin.ModelAdmin):
-    list_display = ['id','user','team','role']
+    list_display = ['id','role']
+
+@admin.register(TeamMembership)
+class TeamMembershipAdmin(admin.ModelAdmin):
+    list_display = ['id','user','team','role','is_active']

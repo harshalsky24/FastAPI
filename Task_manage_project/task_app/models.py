@@ -20,12 +20,9 @@ class Role(models.Model):
         ('member', 'Member'),
     ]
     role = models.CharField(max_length=10, choices=ROLE_CHOICES)
-    #relationships
-    team = models.ForeignKey(Team, on_delete=models.CASCADE, related_name='roles')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='roles')
 
     def __str__(self):
-        return f"{self.user.username} - {self.role} in {self.team.name}"
+        return f"{self.role}"
     
 class Task(models.Model):
     status_choices =[
@@ -51,3 +48,12 @@ class Task(models.Model):
 
     def __str__(self):
         return f"{self.title}"
+    
+class TeamMembership(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    team = models.ForeignKey(Team, on_delete=models.CASCADE)
+    role = models.ForeignKey(Role, on_delete=models.SET_NULL, null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f'{self.user.username} - {self.team.name}'

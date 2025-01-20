@@ -1,7 +1,7 @@
 from rest_framework.decorators import api_view,permission_classes
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from .serializers import RegistrationSerializer, LoginSerializer, TeamSerializer, TaskSerializer,TaskUpdationSerializer, TeamMemberSerializer 
+from .serializers import RegistrationSerializer, LoginSerializer, TeamSerializer, TaskSerializer,TaskUpdationSerializer, TeamMemberSerializer, UserSerializer
 from rest_framework import status
 from .models import Team, Role, TeamMembership, Task
 from django.contrib.auth.models import User
@@ -150,7 +150,7 @@ class TaskCreateView(APIView):
 class TaskUpdateView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def post(self, request, team_id):
+    def put(self, request, team_id):
         task_id = request.data.get('task_id')
         try:
             task = Task.objects.get(id=task_id)
@@ -241,3 +241,117 @@ class UserDashboardview(APIView):
             "task_count": tasks.count()
         }
         return Response(response,status=status.HTTP_200_OK)
+
+class AdminDashboardView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get (self, request):
+
+        all_tasks = Task.objects.all()
+        all_teams = Team.objects.all()
+        all_users = User.objects.all()
+
+        task_data = TaskSerializer(all_tasks, many=True).data
+        team_data = TeamSerializer(all_teams, many=True).data
+        user_data = UserSerializer(all_users, many=True).data
+
+        response_data = {
+            "total_tasks": all_tasks.count(),
+            "total_teams": all_teams.count(),
+            "total_users": all_users.count(),
+            "tasks": task_data,
+            "teams": team_data,
+            "users": user_data,
+        }
+
+        return Response({
+            "success": True,
+            "message": "Admin dashboard data retrieved successfully",
+            "data": response_data}, status=status.HTTP_200_OK)
+
+class TeamDashboardView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self,request):
+
+        user = request.user
+
+        teams = Team.objects.filter(members = user)
+
+        if not teams.exists():
+            return Response({
+                            "success": False,
+                            "message": "you are not member of any team."
+                            },status = status.HTTP_404_NOT_FOUND)
+        
+        
+        assigned_tasks = Task.objects.filter(assignee=user)
+        in_progress_tasks = assigned_tasks.filter(status = "in progress")
+        awating_review_tasks = assigned_tasks.filter(status = "in review")
+
+        assigned_task = TaskSerializer(assigned_tasks, many=True).data
+        in_progress_task = TaskSerializer(in_progress_tasks, many=True).data
+        awating_review_task = TaskSerializer(awating_review_tasks, many=True).data
+
+        response_data = {
+            "user_name": user.username,
+            "total_assigned_tasks": assigned_tasks.count(),
+            "Assigned_tasks": assigned_task,
+            "In_progress_tasks": in_progress_task,
+            "Awating_review_task": awating_review_task,
+        }
+
+        return Response({
+            "success": True,
+            "message": "Team dashboard data retrived successfully.",
+            "data": response_data
+        })
+
+
+class TaskSortFilterView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        tasks = Task.objects.all()
+        print(request.query_params)
+        status = request.query_params.get('status')
+        priority = request.query_params.get('priority')
+        assignee = request.query_params.get('assignee')
+
+
+        if status:
+            match status:
+                case "to do":           #case-sensetive matching
+                    tasks = tasks.filter(status__iexact="To Do")
+                case "in progress":
+                    tasks = tasks.filter(status__iexact="In Progress")
+                case "completed":
+                    tasks = tasks.filter(status__iexact="Completed")
+                case "in review":
+                    tasks = tasks.filter(status__iexact="In Review")
+                case "pending":
+                    tasks = tasks.filter(status__iexact="Pending")
+                case _:
+                    return Response({"error": "Invalid status provided"}, status=400)
+            
+    
+        if priority:
+            #Filter tasks based on a case-insensitive exact match
+            tasks = tasks.filter(priority__exact=priority)
+        
+        if assignee:            #__username access the username #__iexact lookup case-sensetive matching
+            tasks = tasks.filter(assignee__username__iexact=assignee)
+        
+        sort_by = request.query_params.get('sort_by', 'deadline')
+
+        if not sort_by:
+            sort_by = 'deadline'  # Default sorting if invalid field is provided
+        print(sort_by)
+        order = '-' if request.query_params.get('order', 'asc') == 'desc' else ''
+        print(order)
+        tasks = tasks.order_by(f"{order}{sort_by}")
+        print(tasks)
+ 
+        serializer = TaskSerializer(tasks, many=True)
+        return Response(serializer.data)

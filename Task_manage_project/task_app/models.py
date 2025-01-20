@@ -26,15 +26,17 @@ class Role(models.Model):
     
 class Task(models.Model):
     class Status(models.TextChoices):
+        To_Do = 'to do', "To Do"
         PENDING = 'pending', 'Pending'
-        IN_PROGRESS = 'in_progress', 'In Progress'
+        IN_PROGRESS = 'in progress', 'In Progress'
         COMPLETED = 'completed', 'Completed'
+        IN_REVIEW = "in review", "In Review"
 
     class Priority(models.TextChoices):
         LOW = 'low', 'Low'
-
         MEDIUM = 'medium', 'Medium'
         HIGH = 'high', 'High'
+
     title = models.CharField(max_length=200)
     description = models.TextField()
     status = models.CharField(max_length=200, choices=Status, default='Not Started')

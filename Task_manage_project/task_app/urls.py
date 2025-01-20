@@ -7,6 +7,9 @@ urlpatterns = [
      path('teams/add-remove-member/<int:team_id>/', views.AddRemoveTeamMemberView.as_view(), name='add-remove-member'),
      path('task-create/<int:team_id>/', views.TaskCreateView.as_view(), name="create_task"),
      path('task-update/<int:team_id>/', views.TaskUpdateView.as_view(), name="task_update"),
-     path('task-delete/<int:team_id>/', views.DeleteTaskView.as_view(), name="task-delete"),
-     path('user-dashboard/',views.UserDashboardview.as_view(), name="user_dashboard"),
-]
+     path('task-delete/<int:team_id>/', views.DeleteTaskView.as_view(), name="task_delete"),
+     path('user-dashboard/', views.UserDashboardview.as_view(), name="user_dashboard"),
+     path('admin-dashboard/', views.AdminDashboardView.as_view(), name = "class_dashboard"),
+     path('team-dashboard/', views.TeamDashboardView.as_view(), name = "team_dashboard"),
+     path('task-sort-filter/', views.TaskSortFilterView.as_view(), name = "task_sort_filter")
+]   

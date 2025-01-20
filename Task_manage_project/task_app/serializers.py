@@ -51,3 +51,11 @@ class TeamMemberSerializer(serializers.ModelSerializer):
     class Meta:
         model = TeamMembership
         fields = '__all__'
+
+class TaskUpdationSerializer(serializers.Serializer):
+    task_id = serializers.IntegerField()
+    description = serializers.CharField(required = False)
+    status = serializers.ChoiceField(choices=Task.Status, required = False)
+    priority = serializers.ChoiceField(choices=Task.Priority, required = False)
+    creator = serializers.IntegerField(required = False)
+    assignee = serializers.IntegerField(required = False)

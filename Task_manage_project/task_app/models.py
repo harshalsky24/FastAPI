@@ -25,18 +25,20 @@ class Role(models.Model):
         return f"{self.role}"
     
 class Task(models.Model):
-    status_choices =[
-        ('not started','Not Started'),
-        ('in progress','In Progress'),
-        ('in review','In Review'),
-        ('reviewed','Reviewed'),
-        ('completed','Completed'),
-    ]
-    set_priority = [('Low','LOW'),('Medium','MEDIUM'),('High','HIGH')]
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        IN_PROGRESS = 'in_progress', 'In Progress'
+        COMPLETED = 'completed', 'Completed'
+
+    class Priority(models.TextChoices):
+        LOW = 'low', 'Low'
+
+        MEDIUM = 'medium', 'Medium'
+        HIGH = 'high', 'High'
     title = models.CharField(max_length=200)
     description = models.TextField()
-    status = models.CharField(max_length=200, choices=status_choices, default='Not Started')
-    priority = models.CharField(max_length=200, choices=set_priority, default='Medium')
+    status = models.CharField(max_length=200, choices=Status, default='Not Started')
+    priority = models.CharField(max_length=200, choices=Priority, default='Medium')
     deadline = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

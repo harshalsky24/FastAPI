@@ -2,6 +2,9 @@ from datetime import datetime, timedelta
 from jose import  jwt
 from dotenv import load_dotenv
 import os
+from fastapi import Depends, HTTPException
+from fastapi.security import OAuth2PasswordBearer
+from jose import jwt, JWTError
 
 load_dotenv()
 
@@ -24,3 +27,15 @@ def create_refresh_token(data: dict):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+#current login user 
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        return {"user_id": user_id}
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")

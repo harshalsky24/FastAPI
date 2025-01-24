@@ -6,11 +6,11 @@ from typing import Any, Dict
 from .models import User
 from .database import get_db
 from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 SECRET_KEY = "your_secret_key"  
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60  
-REFRESH_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 
 
 # Function to create an access token
 def create_access_token(data: dict, expires_delta: timedelta = None):
@@ -19,18 +19,13 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
-# Function to create a refresh token
-def create_refresh_token(data: Dict[str, Any], expires_delta: timedelta = timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES)):
-    to_encode = data.copy()
-    expiration = datetime.utcnow() + expires_delta
-    to_encode.update({"exp": expiration})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+security = HTTPBearer()
 
 # Dependency to get the current user based on the token
-def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security),db:Session = Depends(get_db)):
+    token = credentials.credentials 
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: int = payload.get("sub")

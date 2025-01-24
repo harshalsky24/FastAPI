@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends ,Query
 from sqlalchemy.orm import Session
 from ..models import Task, Team, TeamMembership, User
-from ..schemas import TaskCreate, TaskOut, TaskResponse, TaskUpdateRequest, DeleteTaskRequest
+from ..schemas import TaskCreate, TaskOut, TaskResponse, TaskUpdateRequest, DeleteTaskRequest, TaskResponseSchema
 from ..database import get_db
 from ..auth import get_current_user
+from typing import List, Optional
 
 router = APIRouter(tags=['Task'])
 
@@ -15,7 +16,7 @@ def create_task(
     current_user: User = Depends(get_current_user)
 ):
     try:
-
+        
         user_id = current_user.id 
         print(user_id) # Access user ID correctly
         if not user_id:
@@ -126,23 +127,44 @@ def delete_task(team_id: int,
         if not task:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
         
-        # user_role = db.query(TeamMembership).filter(TeamMembership.team_id == team_id,
-        #                                             TeamMembership.user_id == current_user.id).first()
-        # if user_role or user_role.role.role_name not in  ["admin", "manager"]:
-        #     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, 
-        #                         detail="You do not have permission to delete this task")
         team_membership = (db.query(TeamMembership).filter(TeamMembership.team_id == team.id, 
-                                                           TeamMembership.user_id == current_user.id).first())
-        
-        if (
-            current_user.id != task.assignee_id and 
-            current_user.id != task.reviewer_id and
-            team_membership.role.role_name != "admin" and
-            team_membership.role.role_name != "manager"
-        ):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="you do not have permission to edit this task")
+                                                           TeamMembership.user_id == current_user.id)
+                                                           .first())
+        if (team_membership.role.role_name != "admin" and team_membership.role.role_name != "manager"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, 
+                                detail="you do not have permission to edit this task")
         db.delete(task)
         db.commit()
         return {"message": "Task Deleted"}
     except Exception as e:
         return {"message": str(e)}
+
+
+@router.get("/task/sortfilter", response_model=List[TaskResponseSchema])
+def sortfilter(
+    db: Session = Depends(get_db),  
+    status: Optional[str] = Query(None, description="Filter by task status"),
+    priority: Optional[str] = Query(None, description="Filter by task priority"),
+    assignee_id: Optional[int] = Query(None, description="Filter by assignee ID"),
+    sort_by: Optional[str] = Query("created_at", description="Sort field (e.g., deadline, created_at)"),
+    order: Optional[str] = Query("asc", description="Sort order: asc or desc"),
+    current_user: User = Depends(get_current_user)
+):
+    query = db.query(Task)
+
+    if status:
+        query = query.filter(Task.status == status)
+    if priority:
+        query = query.filter(Task.priority == priority)
+    if assignee_id:
+        query = query.filter(Task.assignee_id == assignee_id)
+
+
+    sort_column = getattr(Task, sort_by, Task.created_at)  # Default to created_at if invalid
+    if order == "desc":
+        query = query.order_by(sort_column.desc())
+    else:
+        query = query.order_by(sort_column)
+
+    tasks = query.all()
+    return tasks

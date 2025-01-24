@@ -101,3 +101,18 @@ class DeleteTaskRequest(BaseModel):
 
 class TokenData(BaseModel):
     email: str | None = None
+
+class TaskResponseSchema(BaseModel):
+    id: int
+    title: str
+    description: str
+    status: str
+    priority: str
+    deadline: datetime
+    created_at: datetime
+    assignee_id: int
+
+    class Config:
+        from_attributes = True 
+    
+    

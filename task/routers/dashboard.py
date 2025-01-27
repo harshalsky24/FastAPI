@@ -86,13 +86,13 @@ def team_dashboard(team_id: int, db:Session = Depends(get_db),
             detail="You are not a member of this team"
         )
     
-    assigned_tasks = db.query(Task).filter(Task.assignee_id == user_id).all()
+    all_assigned_tasks = db.query(Task).filter(Task.assignee_id == user_id).all()
     in_assigned_tasks = db.query(Task).filter(Task.assignee_id == user_id, Task.status == TaskStatus.IN_PROGRESS).all()
     awaiting_assigned_tasks = db.query(Task).filter(Task.assignee_id == user_id, Task.status == TaskStatus.IN_REVIEW).all()
 
     all_data = {
-        "assigned_task": assigned_tasks,
-        "in_assigned_tasks": in_assigned_tasks,
+        "all_assigned_task": all_assigned_tasks,
+        "in_process_tasks": in_assigned_tasks,
         "awaiting_assigned_tasks": awaiting_assigned_tasks
     }
     

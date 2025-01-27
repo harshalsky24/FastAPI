@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from ..schemas import UserBase, UserOut, UserCreate, UserLogin, Token
 from sqlalchemy.orm import session
 from ..hashing import get_password_hash,verify_password
-from ..auth import create_access_token
+from ..auth import create_access_token, get_current_user
 from ..models import User, UserRole, Role
 from sqlalchemy.orm import Session
 from ..database import SessionLocal
@@ -19,13 +19,22 @@ def get_db():
 
 @router.post("/register", response_model=UserOut)
 def register(user:UserCreate, db: session = Depends(get_db)):
-    hashed_password = get_password_hash(user.password)
-    db_user = User(username = user.username,email = user.email, hashed_password = hashed_password)
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    return db_user
-
+    try:
+        db_user = db.query(User).filter(User.username == user.username).first()
+        if db_user:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail="Username already exists")
+        hashed_password = get_password_hash(user.password)
+        db_user = User(username = user.username,email = user.email, hashed_password = hashed_password)
+        db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
+        return db_user
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An unexpected error occurred: {str(e)}"
+        )
 @router.post("/login",response_model=Token)
 def login(user: UserLogin, db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.email == user.email).first()
@@ -38,7 +47,8 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/roles/")
-def create_role(role_name: UserRole, db: Session = Depends(get_db)):
+def create_role(role_name: UserRole, db: Session = Depends(get_db), 
+                current_user: User= Depends(get_current_user)):
     db_role = Role(role_name=role_name)
     db.add(db_role)
     db.commit()

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from ..schemas import UserBase, UserOut, UserCreate, UserLogin, Token
+from ..schemas import UserBase, UserOut, UserCreate, UserLogin, Token, RoleCreateRequest
 from sqlalchemy.orm import session
 from ..hashing import get_password_hash,verify_password
 from ..auth import create_access_token, get_current_user
@@ -47,7 +47,7 @@ def login(user: UserLogin, db: Session = Depends(get_db)):
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/roles/")
-def create_role(role_name: UserRole, db: Session = Depends(get_db), 
+def create_role(role_request: RoleCreateRequest, role_name: UserRole, db: Session = Depends(get_db), 
                 current_user: User= Depends(get_current_user)):
     db_role = Role(role_name=role_name)
     db.add(db_role)

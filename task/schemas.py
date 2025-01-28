@@ -115,4 +115,5 @@ class TaskResponseSchema(BaseModel):
     class Config:
         from_attributes = True 
     
-    
+class RoleCreateRequest(BaseModel):
+    role_name: str

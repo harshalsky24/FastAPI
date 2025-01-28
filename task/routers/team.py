@@ -52,6 +52,9 @@ def add_team_member(team_id: int,
     
     except Exception as e:
         return {"message": str(e)}
+    except Exception as e:
+        # Log or handle other exceptions
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Internal server error")
     
 
 @router.delete("/team/{team_id}/remove-member", response_model= ResponseMessage)

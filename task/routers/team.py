@@ -59,7 +59,7 @@ def add_team_member(team_id: int,
 
 @router.delete("/team/{team_id}/remove-member", response_model= ResponseMessage)
 def remove_member(team_id:int, request: TeamRemoveMember, db:Session=Depends(get_db),
-                  current_user: dict = Depends(get_current_user)):
+                  current_user: User = Depends(get_current_user)):
     
         # breakpoint()
         team = db.query(Team).filter(Team.id == team_id).first()

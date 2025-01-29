@@ -1,23 +1,32 @@
 import pytest
+import json
 from fastapi.testclient import TestClient
 from task.main import app
 from task.database import SessionLocal
-from task.models import User, Team, Role, TeamMembership
+from task.models import User, Team, Role, TeamMembership, Task
 from task.hashing import get_password_hash
+from task.auth import create_access_token
 
 client = TestClient(app)
 
+@pytest.fixture(scope="module")
+def client():
+    """Provides a TestClient for FastAPI."""
+    return TestClient(app)
+
 @pytest.fixture(scope="function")
 def db_session():
-    """Provides a database session for tests and handles cleanup."""
+    """Provides a fresh database session for each test."""
     db = SessionLocal()
     yield db
     db.rollback()
     db.close()
 
 @pytest.fixture(scope="function")
-def test_user(db_session):
-    """Sets up a test user in the database."""
+def setup_data(db_session):
+    """Setup test data: User, Team, Role, and Membership before running the test."""
+    
+    # Create a test user
     test_user = User(
         username="testuser",
         email="testuser@example.com",
@@ -25,73 +34,81 @@ def test_user(db_session):
     )
     db_session.add(test_user)
     db_session.commit()
-    yield test_user
-    db_session.query(User).filter(User.username == "testuser").delete()
-    db_session.commit()
+    db_session.refresh(test_user)
 
-@pytest.fixture(scope="function")
-def test_role(db_session):
-    """Sets up a test role in the database."""
-    test_role = Role(role_name="member")
-    db_session.add(test_role)
-    db_session.commit()
-    yield test_role
-    db_session.query(Role).filter(Role.role_name == "member").delete()
-    db_session.commit()
-
-@pytest.fixture(scope="function")
-def test_team(db_session):
-    """Sets up a test team in the database."""
+    # Create a test team
     test_team = Team(name="Test Team")
     db_session.add(test_team)
     db_session.commit()
-    yield test_team
-    db_session.query(Team).filter(Team.name == "Test Team").delete()
+    db_session.refresh(test_team)
+
+    # Assign a role
+    test_role = Role(role_name="admin")
+    db_session.add(test_role)
+    db_session.commit()
+    db_session.refresh(test_role)
+
+    # Add user to the team with role
+    team_membership = TeamMembership(team_id=test_team.id, user_id=test_user.id, role_id=test_role.id)
+    db_session.add(team_membership)
+    db_session.commit()
+
+    yield {
+        "user": test_user,
+        "team": test_team,
+        "role": test_role
+    }
+
+    # Cleanup
+    db_session.query(TeamMembership).filter_by(team_id=test_team.id).delete()
+    db_session.query(Task).filter_by(team_id=test_team.id).delete()
+    db_session.query(Role).filter_by(id=test_role.id).delete()
+    db_session.query(Team).filter_by(id=test_team.id).delete()
+    db_session.query(User).filter_by(id=test_user.id).delete()
     db_session.commit()
 
 
-def test_remove_team_member_success(db_session, test_user, test_role, test_team):
-    """Test removing a team member successfully."""
-    # Login to get the authentication token
-    valid_credentials = {
-        "email": "testuser@example.com",
-        "password": "testpassword"
-    }
-    login_response = client.post("/login", json=valid_credentials)
-    token = login_response.json()["access_token"]
-
-    # Prepare request data for adding the team member
-    add_member_data = {
-        "user_id": test_user.id,
-        "role_id": test_role.id
-    }
-    team_id = test_team.id
+def test_remove_member(client, db_session, setup_data):
+    """Test adding and removing a member from a team."""
+    
+    # Get user and team from setup data
+    user = setup_data['user']
+    team = setup_data['team']
+    
+    # Generate JWT Token for authentication
+    token = create_access_token({"sub": str(user.id)})
     headers = {"Authorization": f"Bearer {token}"}
 
+    # Step 1: Add the user to the team
+    # Prepare request data for adding a team member
+    # breakpoint()
+    data = {
+        "user_id":user.id,
+        "role_id":setup_data['role'].id
+    }
+    team_id = team.id
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Send POST request to add the member
     add_member_response = client.post(f"/team/{team_id}/add-member", 
-                                      json=add_member_data, headers=headers)
+                                      json=data, headers=headers)
     assert add_member_response.status_code == 200,f"Failed to add member: {add_member_response.json()}"
 
+    # Verify the user was added (You can also verify in the database)
+    added_member = db_session.query(TeamMembership).filter_by(user_id=user.id, team_id=team.id).first()
+    assert added_member is not None
 
-    # Send DELETE request to remove the member
-    # remove_member_data = {
-    #     "user_id": test_user.id
-    # }
-    team_id = test_team.id
-    print(team_id)
+    # Step 2: Remove the user from the team
+    data = {"user_id": user.id}
     headers = {"Authorization": f"Bearer {token}"}
-    remove_member_response = client.delete(f"/team/{team_id}/remove-member",params={"user_id": test_user.id}, headers=headers)
 
-    # Assertions
-    print(remove_member_response.json()) 
-    assert remove_member_response.status_code == 200, f"Failed to remove member: {remove_member_response.json()}"
-    # response_data = response.json()
-    # assert "message" in response_data
-    # assert response_data["message"] == "User removed from team successfully."
+    remove_member_response = client.delete(f"/team/{team_id}/remove-member",data=json.dumps(data),headers=headers)
+    assert remove_member_response.status_code == 200, f"Expected 200, got  
+    {remove_member_response.status_code}, response: {remove_member_response.text}"
+    expected_response = {"message": "User removed from the team successfully"}
+    assert remove_member_response.json() == expected_response, f"Expected {expected_response}, got {remove_member_response.json()}"
 
-    # Verify the member is removed from the database
-    membership = db_session.query(TeamMembership).filter_by(user_id=test_user.id, team_id=team_id).first()
-    assert membership is None, "Membership entry still exists in the database."
+    # Verify the user was removed (You can also verify in the database)
+    removed_member = db_session.query(TeamMembership).filter_by(user_id=user.id, team_id=team.id).first()
+    assert removed_member is None
 
-    # Cleanup (though the membership should already be removed by the test)
-    db_session.commit()

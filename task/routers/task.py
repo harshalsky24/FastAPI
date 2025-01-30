@@ -1,11 +1,11 @@
 from fastapi import APIRouter, HTTPException, status, Depends ,Query
 from sqlalchemy.orm import Session
-from ..models import Task, Team, TeamMembership, User
-from ..schemas import TaskCreate, TaskOut, TaskResponse, TaskUpdateRequest, DeleteTaskRequest, TaskResponseSchema
-from ..database import get_db
-from ..auth import get_current_user
+from task.models import Task, Team, TeamMembership, User
+from task.schemas import TaskCreate, TaskOut, TaskResponse, TaskUpdateRequest, DeleteTaskRequest, TaskResponseSchema
+from task.database import get_db
+from task.auth import get_current_user
 from typing import List, Optional
-
+from task.utils.websocket_manager import manager
 router = APIRouter(tags=['Task'])
 
 @router.post("/task/{team_id}/create-task", response_model=TaskOut)
@@ -60,43 +60,48 @@ def create_task(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An error occurred while creating the task.")
 
 @router.put("/task/{team_id}/update-task", response_model=TaskResponse)
-def update_task(team_id: int, request: TaskUpdateRequest, 
-                db: Session = Depends(get_db),
-                current_user: User = Depends(get_current_user)):
-    
+async def update_task(team_id: int, request: TaskUpdateRequest, 
+                      db: Session = Depends(get_db),
+                      current_user: User = Depends(get_current_user)):
     try:
-        
         current_user_id = current_user.id 
         team = db.query(Team).filter(Team.id == team_id).first()
-        print(team)
         if not team:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
         
         task = db.query(Task).filter(Task.id == request.task_id).first()
-        print(task)
         if not task:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
         
         if task.team_id != team.id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The task does not belog to the specificed team.")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The task does not belong to the specified team.")
         
-        team_membership = (db.query(TeamMembership).filter(TeamMembership.team_id == team.id, 
-                                                           TeamMembership.user_id == current_user_id)
-                                                           .first())
+        team_membership = db.query(TeamMembership).filter(
+            TeamMembership.team_id == team.id, 
+            TeamMembership.user_id == current_user_id
+        ).first()
+
         if not team_membership:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,detail="You are not a member of this team")
-        
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not a member of this team")
+
         if (
             current_user_id != task.assignee_id and 
             current_user_id != task.reviewer_id and
             team_membership.role.role_name != "manager"
         ):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="you do not have permission to edit this task")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to edit this task")
 
+        # Store old values for notification message
+        old_status = task.status
+        old_assignee = task.assignee_id
+
+        # Update Task Fields
         if request.description:
             task.description = request.description
         if request.priority:
             task.priority = request.priority
+        if request.status:
+            task.status = request.status  # Allow updating status
         if request.assignee_id:
             assignee = db.query(User).filter(User.id == request.assignee_id).first()
             if not assignee:
@@ -105,6 +110,28 @@ def update_task(team_id: int, request: TaskUpdateRequest,
 
         db.commit()
         db.refresh(task)
+
+        # 🔔 **Send Real-Time Notifications via WebSockets**
+        notification_messages = []
+
+        # Notify previous and new assignee (if changed)
+        if old_assignee != task.assignee_id:
+            notification_messages.append(f"Task {task.id} was reassigned to a new user.")
+
+        # Notify task status change
+        if old_status != task.status:
+            notification_messages.append(f"Task {task.id} status changed from {old_status} to {task.status}.")
+
+        # Get users to notify (assignee, reviewer, and team members)
+        users_to_notify = {task.assignee_id, task.reviewer_id}  # Use a set to avoid duplicates
+        team_members = db.query(TeamMembership).filter(TeamMembership.team_id == team_id).all()
+        for member in team_members:
+            users_to_notify.add(member.user_id)
+
+        # Send notifications to all relevant users
+        for message in notification_messages:
+            await manager.broadcast_to_team(list(users_to_notify), message)
+
         return task
     
     except Exception as e:

@@ -69,6 +69,7 @@ class TaskUpdateRequest(BaseModel):
     task_id: int
     description: Optional[str] = None
     priority: PriorityStatus
+    status: TaskStatus
     assignee_id: Optional[int] = None
 
 

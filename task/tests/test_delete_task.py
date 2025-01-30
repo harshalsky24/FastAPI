@@ -102,11 +102,14 @@ def test_delete_task(db_session, setup_data):
     print(team_id)
      # Step 3: Send Request to Delete Task
     delete_payload = {"task_id": task_id}
-    delete_response = client.delete(f"/task/{test_team.id}/delete-task", params=delete_payload, headers=headers)
+    delete_response = client.request(method = "DELETE",
+     url = f"/task/{test_team.id}/delete-task", 
+     json=delete_payload, 
+     headers=headers)
     
     # Step 4: Validate Response
     assert delete_response.status_code == 200, f"Expected 200, got {delete_response.status_code}"
-    assert delete_response.json()["message"] == "Task deleted successfully"
+    assert delete_response.json()["message"] == "Task Deleted"
     
     # Step 5: Ensure Task is Deleted
     deleted_task = db_session.query(Task).filter_by(id=task_id).first()

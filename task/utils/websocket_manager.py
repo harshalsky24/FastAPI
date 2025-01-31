@@ -1,36 +1,40 @@
-from fastapi import WebSocket
+from fastapi import WebSocket, WebSocketDisconnect
 from typing import Dict, List
 
 class WebSocketManager:
+    """
+        Manages WebSocket connections for real-time communication.
+    """
     def __init__(self):
-        self.active_connections: Dict[int, List[WebSocket]] = {}
+        self.active_connections: Dict[int, WebSocket] = {}
 
     async def connect(self, user_id: int, websocket: WebSocket):
-        """Connect a user to WebSocket and store their connection."""
+        """Accept WebSocket connection and store it for a user."""
         await websocket.accept()
-        if user_id not in self.active_connections:
-            self.active_connections[user_id] = []
-        self.active_connections[user_id].append(websocket)
-        print(f"User {user_id} connected to WebSocket.")
+        self.active_connections[user_id] = websocket
+        print(f"WebSocket connected for user {user_id}. Active Users: {list(self.active_connections.keys())}")
 
-    def disconnect(self, user_id: int, websocket: WebSocket):
-        """Disconnect a user's WebSocket connection."""
+    async def disconnect(self, user_id: int):
+        """Remove WebSocket connection when the user disconnects."""
         if user_id in self.active_connections:
-            self.active_connections[user_id].remove(websocket)
-            if not self.active_connections[user_id]:  # Remove empty list
-                del self.active_connections[user_id]
-        print(f"User {user_id} disconnected.")
+            del self.active_connections[user_id]
+            print(f"WebSocket disconnected for user {user_id}.")
 
     async def send_personal_message(self, user_id: int, message: str):
-        """Send a notification to a specific user."""
+        """Send message to a specific user if connected."""
         if user_id in self.active_connections:
-            for connection in self.active_connections[user_id]:
-                await connection.send_text(message)
+            try:
+                await self.active_connections[user_id].send_text(message)
+                print(f"Sent message to user {user_id}: {message}")
+            except Exception as e:
+                print(f"Error sending message to {user_id}: {str(e)}")
+        else:
+            print(f"User {user_id} is not connected.")
 
     async def broadcast_to_team(self, user_ids: List[int], message: str):
-        """Broadcast a message to multiple users."""
+        """Send message to multiple users."""
+        print(f"Broadcasting message: '{message}' to users: {user_ids}")
         for user_id in user_ids:
             await self.send_personal_message(user_id, message)
 
-# Create a WebSocket manager instance
 manager = WebSocketManager()

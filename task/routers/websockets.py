@@ -1,25 +1,31 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query
 from task.utils.websocket_manager import manager
 from task.auth import get_current_user
 from task.auth import verify_jwt_token
 
 router = APIRouter()
-active_connections = {}
+active_connections = {} #connection alive
 
-@router.websocket("/ws/notifications")
-async def websocket_endpoint(websocket: WebSocket, token: str = None):
-    if not token:
-        await websocket.close(code=403)
-        return
+@router.websocket("/ws/notifications/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: int):
+    """
+        WebSocket endpoint for real-time notifications.
+
+        This endpoint establishes a WebSocket connection for a given user, allowing 
+        real-time message exchange between the client and the server.
     
+        Functionality:
+            Connects the user to the WebSocket manager.
+            Listens for incoming messages from the user.
+            Sends acknowledgment messages back to the client.
+            Handles disconnection when the user disconnects.
+    """
+    await manager.connect(user_id, websocket)
     try:
-        user_id = await verify_jwt_token(token)  # Validate token
-        await websocket.accept()
-        print(f"✅ WebSocket connected for user: {user_id}")
-
         while True:
-            message = await websocket.receive_text()  # Keep connection alive
-            print(f"📩 Received message: {message}")
+            message = await websocket.receive_text()
+            print(f"Received from User {user_id}: {message}")
+            await websocket.send_text(f"Server received: {message}")
 
     except WebSocketDisconnect:
-        print("❌ WebSocket disconnected")
+        manager.disconnect(user_id, websocket)

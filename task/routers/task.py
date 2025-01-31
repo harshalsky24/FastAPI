@@ -13,8 +13,18 @@ def create_task(
     team_id: int, 
     task_data: TaskCreate, 
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+    current_user: User = Depends(get_current_user)):
+    """
+        Method to create a new task within a team.
+        
+        This API allows users with admin or manager roles within a team to create new tasks.
+        It checks if the team exists, if the user has the necessary permissions, 
+        and if a task with the same title already exists in the team.
+        
+        Method: POST
+        Response: Returns the newly created task details upon successful creation.
+        Permissions: Only users with 'admin' or 'manager' roles in the team can create tasks.
+    """
     try:
         
         user_id = current_user.id 
@@ -57,12 +67,29 @@ def create_task(
         return new_task
     
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An error occurred while creating the task.")
+        return{"message": str(e)}
 
 @router.put("/task/{team_id}/update-task", response_model=TaskResponse)
 async def update_task(team_id: int, request: TaskUpdateRequest, 
                       db: Session = Depends(get_db),
                       current_user: User = Depends(get_current_user)):
+    """
+        Method to update an existing task within a team.
+        
+        This API allows users to update task details such as description, priority, status, 
+        and assignee. The user must be either the assignee, reviewer, 
+        or have a manager role in the team.
+        
+        Method: PUT
+        Response: Returns the updated task details.
+        Permissions: Only the assignee, reviewer, or users with a 'manager' role can update the task.
+        Error Handling: If the team or task does not exist, a 404 error is returned.
+                        If the user is not part of the team or lacks the necessary permissions, 
+                        a 403 error is returned.
+                        If the assignee provided is invalid, a 404 error is returned.
+        Real-Time Notifications: Sends WebSocket notifications to team members 
+                                 if task assignee or status changes.
+    """
     try:
         current_user_id = current_user.id 
         team = db.query(Team).filter(Team.id == team_id).first()
@@ -91,9 +118,11 @@ async def update_task(team_id: int, request: TaskUpdateRequest,
         ):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to edit this task")
 
-        # Store old values for notification message
-        old_status = task.status
+        # Store old values before updating
         old_assignee = task.assignee_id
+        old_status = task.status
+        # task.assignee_id = task_data.assignee_id
+        # task.status = task_data.status
 
         # Update Task Fields
         if request.description:
@@ -111,26 +140,35 @@ async def update_task(team_id: int, request: TaskUpdateRequest,
         db.commit()
         db.refresh(task)
 
-        # 🔔 **Send Real-Time Notifications via WebSockets**
+        # **Send Real-Time Notifications via WebSockets**
         notification_messages = []
 
-        # Notify previous and new assignee (if changed)
+        # Notify Assignee Change (if changed)
         if old_assignee != task.assignee_id:
-            notification_messages.append(f"Task {task.id} was reassigned to a new user.")
+            notification_messages.append({
+                "users": [old_assignee, task.assignee_id],  
+                "message": f"Task {task.id} was reassigned to a user {task.assignee_id}."
+            })
 
-        # Notify task status change
+        # Notify Task Status Change (if changed)
         if old_status != task.status:
-            notification_messages.append(f"Task {task.id} status changed from {old_status} to {task.status}.")
+            assigned_users = {task.assignee_id, task.reviewer_id}  
 
-        # Get users to notify (assignee, reviewer, and team members)
-        users_to_notify = {task.assignee_id, task.reviewer_id}  # Use a set to avoid duplicates
-        team_members = db.query(TeamMembership).filter(TeamMembership.team_id == team_id).all()
-        for member in team_members:
-            users_to_notify.add(member.user_id)
+            # Get all team members
+            team_members = db.query(TeamMembership).filter(TeamMembership.team_id == task.team_id).all()
+            for member in team_members:
+                assigned_users.add(member.user_id)
 
-        # Send notifications to all relevant users
-        for message in notification_messages:
-            await manager.broadcast_to_team(list(users_to_notify), message)
+            notification_messages.append({
+                "users": list(assigned_users),
+                "message": f"Task {task.id} status changed from {old_status} to {task.status}."
+            })
+
+        # Send WebSocket notifications
+        for notif in notification_messages:
+            print(f"Sending notification: {notif['message']} to users {notif['users']}")
+            await manager.broadcast_to_team(notif["users"], notif["message"])
+        
 
         return task
     
@@ -143,6 +181,17 @@ def delete_task(team_id: int,
                 request: DeleteTaskRequest, 
                 db: Session = Depends(get_db), 
                 current_user: User = Depends(get_current_user)):
+    """
+        Deletes a task from a specific team.
+
+        This endpoint allows admins and managers to delete tasks from a given team.
+        
+        Method: DELETE
+        Path Parameters: team_id (int): The ID of the team from which the task should be deleted.
+        Request Body: task_id (int): The ID of the task to be deleted.
+        Response: A success message confirming task deletion.
+        Permissions: Only users with the role of admin or manager can delete tasks.
+    """
     try:
         task_id = request.task_id
     
@@ -175,8 +224,18 @@ def sortfilter(
     assignee_id: Optional[int] = Query(None, description="Filter by assignee ID"),
     sort_by: Optional[str] = Query("created_at", description="Sort field (e.g., deadline, created_at)"),
     order: Optional[str] = Query("asc", description="Sort order: asc or desc"),
-    current_user: User = Depends(get_current_user)
-):
+    current_user: User = Depends(get_current_user)):
+
+    """
+        Deletes a task from a specific team.
+        This endpoint allows admins and managers to delete tasks from a given team.
+    
+        Method: DELETE
+        Path Parameters: team_id (int): The ID of the team from which the task should be deleted.
+        Request Body: task_id (int): The ID of the task to be deleted.
+        Response: A success message confirming task deletion.
+        Permissions: Only users with the role of admin or manager can delete tasks.
+    """
     query = db.query(Task)
 
     if status:

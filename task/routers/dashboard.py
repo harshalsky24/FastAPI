@@ -11,7 +11,11 @@ router = APIRouter(tags=["Dashboard"])
 def user_dashboard(db: Session = Depends(get_db), 
         current_user: User = Depends(get_current_user)):
     
-    
+    """
+        Retrieves the user dashboard with an overview of tasks.
+        Method: GET
+        Response: All the records shows from assigned tasks, created tasks, review tasks.
+    """
     assigned_tasks = db.query(Task).filter(Task.assignee_id == current_user.id).all()
 
     created_tasks = db.query(Task).filter(Task.creator_id == current_user.id).all()
@@ -35,6 +39,14 @@ def user_dashboard(db: Session = Depends(get_db),
 def admin_dashboard(db:Session = Depends(get_db), 
         current_user: User = Depends(get_current_user)
     ):
+    """
+    Retrieves the admin dashboard with an overview of tasks, users, and teams.
+
+    Access: Admin only.
+    Method: GET
+    Response: Total counts of tasks, users, and teams.
+              Recent tasks, users, and teams (latest 5 records).
+    """
     team_membership = (db.query(TeamMembership).filter( TeamMembership.user_id == current_user.id).first())
     if team_membership.role.role_name != "admin":
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, 
@@ -68,6 +80,15 @@ def admin_dashboard(db:Session = Depends(get_db),
 def team_dashboard(team_id: int, db:Session = Depends(get_db), 
         current_user: User = Depends(get_current_user)
     ):
+    """
+        Retrieves the team dashboard with an overview of tasks assigned to the current user.
+
+        Access: Team members only.
+        Method: GET
+        Path Parameter: team_id (int): The ID of the team whose dashboard is being accessed.
+        Response: Lists all tasks assigned to the user within the specified team.
+
+    """
     # breakpoint()
     user_id = current_user.id
     team = db.query(Team).filter(Team.id == team_id).first()

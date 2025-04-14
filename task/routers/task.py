@@ -6,6 +6,7 @@ from task.database import get_db
 from task.auth import get_current_user
 from typing import List, Optional
 from task.utils.websocket_manager import manager
+from task.routers.permissions import check_user_permission
 router = APIRouter(tags=['Task'])
 
 @router.post("/task/{team_id}/create-task", response_model=TaskOut)
@@ -25,50 +26,50 @@ def create_task(
         Response: Returns the newly created task details upon successful creation.
         Permissions: Only users with 'admin' or 'manager' roles in the team can create tasks.
     """
-    try:
         
-        user_id = current_user.id 
-        print(user_id) # Access user ID correctly
-        if not user_id:
-            raise HTTPException(status_code=400, detail="User ID not found")
-        team = db.query(Team).filter(Team.id == team_id).first()
-        if not team:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+    user_id = current_user.id 
+    print(user_id) # Access user ID correctly
+    if not user_id:
+        raise HTTPException(status_code=400, detail="User ID not found")
+    team = db.query(Team).filter(Team.id == team_id).first()
+    if not team:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
 
-        team_membership = (db.query(TeamMembership).filter(TeamMembership.team_id == team.id, 
-                                                           TeamMembership.user_id == current_user.id).first())
-        
-        if (
-            team_membership.role.role_name != "admin" and
-            team_membership.role.role_name != "manager"
-        ):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="you do not have permission to edit this task")
-
-        existing_task = db.query(Task).filter(Task.title == task_data.title).first()
-        if existing_task:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Task with this title already exists.")
-
-        new_task = Task(
-            title=task_data.title,
-            description=task_data.description,
-            status=task_data.status,
-            priority=task_data.priority,
-            deadline=task_data.deadline,
-            creator_id=user_id,
-            team_id=team_id,
-            reviewer_id=task_data.reviewer_id,
-            assignee_id=task_data.assignee_id
-        )
-
-        db.add(new_task)
-        db.commit()
-        db.refresh(new_task)
-
-        return new_task
+    user = (db.query(User).filter(User.id == current_user.id).first())
     
-    except Exception as e:
-        return{"message": str(e)}
+    if (
+        user.role != "admin" 
+        # and
+        # team_membership.role.role_name != "manager"
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="you do not have permission to edit this task")
 
+    existing_task = db.query(Task).filter(Task.title == task_data.title).first()
+    if existing_task:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Task with this title already exists.")
+    
+    # check_user_permission(current_user.id,db)
+    # print(current_user.id)
+    
+    new_task = Task(
+        title=task_data.title,
+        description=task_data.description,
+        status=task_data.status,
+        priority=task_data.priority,
+        deadline=task_data.deadline,
+        creator_id=user_id,
+        team_id=team_id,
+        reviewer_id=task_data.reviewer_id,
+        assignee_id=task_data.assignee_id,
+        organization_id=task_data.organization_id,
+    )
+
+    db.add(new_task)
+    db.commit()
+    db.refresh(new_task)
+
+    return new_task
+    
 @router.put("/task/{team_id}/update-task", response_model=TaskResponse)
 async def update_task(team_id: int, request: TaskUpdateRequest, 
                       db: Session = Depends(get_db),
@@ -90,90 +91,88 @@ async def update_task(team_id: int, request: TaskUpdateRequest,
         Real-Time Notifications: Sends WebSocket notifications to team members 
                                  if task assignee or status changes.
     """
-    try:
-        current_user_id = current_user.id 
-        team = db.query(Team).filter(Team.id == team_id).first()
-        if not team:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
-        
-        task = db.query(Task).filter(Task.id == request.task_id).first()
-        if not task:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-        
-        if task.team_id != team.id:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The task does not belong to the specified team.")
-        
-        team_membership = db.query(TeamMembership).filter(
-            TeamMembership.team_id == team.id, 
-            TeamMembership.user_id == current_user_id
-        ).first()
-
-        if not team_membership:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not a member of this team")
-
-        if (
-            current_user_id != task.assignee_id and 
-            current_user_id != task.reviewer_id and
-            team_membership.role.role_name != "manager"
-        ):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to edit this task")
-
-        # Store old values before updating
-        old_assignee = task.assignee_id
-        old_status = task.status
-        # task.assignee_id = task_data.assignee_id
-        # task.status = task_data.status
-
-        # Update Task Fields
-        if request.description:
-            task.description = request.description
-        if request.priority:
-            task.priority = request.priority
-        if request.status:
-            task.status = request.status  # Allow updating status
-        if request.assignee_id:
-            assignee = db.query(User).filter(User.id == request.assignee_id).first()
-            if not assignee:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignee not found")
-            task.assignee_id = assignee.id
-
-        db.commit()
-        db.refresh(task)
-
-        # **Send Real-Time Notifications via WebSockets**
-        notification_messages = []
-
-        # Notify Assignee Change (if changed)
-        if old_assignee != task.assignee_id:
-            notification_messages.append({
-                "users": [old_assignee, task.assignee_id],  
-                "message": f"Task {task.id} was reassigned to a user {task.assignee_id}."
-            })
-
-        # Notify Task Status Change (if changed)
-        if old_status != task.status:
-            assigned_users = {task.assignee_id, task.reviewer_id}  
-
-            # Get all team members
-            team_members = db.query(TeamMembership).filter(TeamMembership.team_id == task.team_id).all()
-            for member in team_members:
-                assigned_users.add(member.user_id)
-
-            notification_messages.append({
-                "users": list(assigned_users),
-                "message": f"Task {task.id} status changed from {old_status} to {task.status}."
-            })
-
-        # Send WebSocket notifications
-        for notif in notification_messages:
-            print(f"Sending notification: {notif['message']} to users {notif['users']}")
-            await manager.broadcast_to_team(notif["users"], notif["message"])
-        
-
-        return task
     
-    except Exception as e:
-        return {"message": str(e)}
+    current_user_id = current_user.id 
+    team = db.query(Team).filter(Team.id == team_id).first()
+    if not team:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+    
+    task = db.query(Task).filter(Task.id == request.task_id).first()
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+    
+    if task.team_id != team.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The task does not belong to the specified team.")
+    
+    # team_membership = db.query(TeamMembership).filter(
+    #     TeamMembership.team_id == team.id, 
+    #     TeamMembership.user_id == current_user_id
+    # ).first()
+
+    # if not team_membership:
+    #     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You are not a member of this team")
+
+    # if (
+    #     current_user_id != task.assignee_id and 
+    #     current_user_id != task.reviewer_id and
+    #     team_membership.role.role_name != "manager"
+    # ):
+    #     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have permission to edit this task")
+
+    check_user_permission(current_user_id,db)
+    # Store old values before updating
+    old_assignee = task.assignee_id
+    old_status = task.status
+    # task.assignee_id = task_data.assignee_id
+    # task.status = task_data.status
+
+    # Update Task Fields
+    if request.description:
+        task.description = request.description
+    if request.priority:
+        task.priority = request.priority
+    if request.status:
+        task.status = request.status  # Allow updating status
+    if request.assignee_id:
+        assignee = db.query(User).filter(User.id == request.assignee_id).first()
+        if not assignee:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignee not found")
+        task.assignee_id = assignee.id
+
+    db.commit()
+    db.refresh(task)
+    # breakpoint()
+    # **Send Real-Time Notifications via WebSockets**
+    notification_messages = []
+
+    # Notify Assignee Change (if changed)
+    if old_assignee != task.assignee_id:
+        notification_messages.append({
+            "users": [old_assignee, task.assignee_id],  
+            "message": f"Task {task.id} was reassigned to a user {task.assignee_id}."
+        })
+
+    # Notify Task Status Change (if changed)
+    if old_status != task.status:
+        assigned_users = {task.assignee_id, task.reviewer_id}  
+
+        # Get all team members
+        team_members = db.query(TeamMembership).filter(TeamMembership.team_id == task.team_id).all()
+        for member in team_members:
+            assigned_users.add(member.user_id)
+
+        notification_messages.append({
+            "users": list(assigned_users),
+            "message": f"Task {task.id} status changed from {old_status} to {task.status}."
+        })
+
+    # Send WebSocket notifications
+    for notif in notification_messages:
+        print(f"Sending notification: {notif['message']} to users {notif['users']}")
+        await manager.broadcast_to_team(notif["users"], notif["message"])
+    
+
+    return task
 
 
 @router.delete("/task/{team_id}/delete-task")
@@ -226,16 +225,6 @@ def sortfilter(
     order: Optional[str] = Query("asc", description="Sort order: asc or desc"),
     current_user: User = Depends(get_current_user)):
 
-    """
-        Deletes a task from a specific team.
-        This endpoint allows admins and managers to delete tasks from a given team.
-    
-        Method: DELETE
-        Path Parameters: team_id (int): The ID of the team from which the task should be deleted.
-        Request Body: task_id (int): The ID of the task to be deleted.
-        Response: A success message confirming task deletion.
-        Permissions: Only users with the role of admin or manager can delete tasks.
-    """
     query = db.query(Task)
 
     if status:

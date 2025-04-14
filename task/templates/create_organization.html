@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="/static/create_organization.css">
+</head>
+<body>
+    <div class="container">
+        <h2>Create Organization</h2>
+        <input type="text" id="org_name" placeholder="Enter Organization Name" required>
+        <button id="create_org">Create Organization</button>
+        <p class="message" id="response_message"></p>
+    </div>
+    <script>
+        $(document).ready(function() {
+            $("#create_org").click(function() {
+                let orgName = $("#org_name").val();
+                let token = localStorage.getItem("access_token");
+
+                if (!orgName) {
+                    $("#response_message").text("Organization name is required.").css("color", "red");
+                    return;
+                }
+
+                if (!token) {
+                    $("#response_message").text("User not authenticated. Please log in.").css("color", "red");
+                    return;
+                }
+
+                console.log("Sending Request:", { name: orgName });
+
+                $.ajax({
+                    url: "http://127.0.0.1:8000/organization/create",
+                    type: "POST",
+                    contentType: "application/json",
+                    headers: {
+                        "Authorization": "Bearer " + token
+                    },
+                    data: JSON.stringify({ name: orgName }),
+                    success: function(response) {
+                        console.log("Response:", response);
+                        $("#response_message").text(`Organization Created Successfully! ID: ${response.organization_id}`).css("color", "green");
+                        
+                        // Redirect after 5 minutes (300000 milliseconds)
+                        setTimeout(function() {
+                            location.reload();
+                        }, 300000);
+                    },
+                    error: function(xhr) {
+                        console.error("Error:", xhr);
+                        let errorMessage = xhr.responseJSON ? xhr.responseJSON.detail : "An error occurred";
+                        $("#response_message").text(errorMessage).css("color", "red");
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

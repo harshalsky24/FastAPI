@@ -23,9 +23,6 @@ async def websocket_endpoint(websocket: WebSocket, user_id: int):
     await manager.connect(user_id, websocket)
     try:
         while True:
-            message = await websocket.receive_text()
-            print(f"Received from User {user_id}: {message}")
-            await websocket.send_text(f"Server received: {message}")
-
+            await websocket.receive_text()  # Keep the connection alive
     except WebSocketDisconnect:
-        manager.disconnect(user_id, websocket)
+        manager.disconnect(user_id)

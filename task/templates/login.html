@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="/static/login.css">
+</head>
+<body>
+    <div class="login-container">
+        <h2>Login</h2>
+        <input type="email" id="email" placeholder="Email" required>
+        <input type="password" id="password" placeholder="Password" required>
+        <button id="loginBtn">Login</button>
+        <p id="error-message" style="color: red;"></p>
+        <button id="registerBtn">Register</button> 
+    </div>
+
+    <script>
+        $(document).ready(function(){
+            $("#loginBtn").click(function(){
+                let email = $("#email").val();
+                let password = $("#password").val();
+
+                $.ajax({
+                    url: "http://127.0.0.1:8000/login",
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify({ email: email, password: password }),
+                    success: function(response) {
+                        if (response && response.access_token && response.refresh_token) {
+                            localStorage.setItem("access_token", response.access_token);
+                            localStorage.setItem("refresh_token", response.refresh_token);
+                            localStorage.setItem("role", response.role);
+                            // Redirect everyone to the Dashboard first
+                                window.location.href = "/dashboard-ui"  
+                        } else {
+                            $("#error-message").text(response.message);
+                        }
+                    },
+                    error: function(err) {
+                        console.error("Error:", err);
+                        $("#error-message").text("Login failed. Please try again.");
+                    }
+                });
+            });
+            $("#registerBtn").click(function(){
+                localStorage.removeItem("token");
+                window.location.href = "/"; // Redirect to register page
+            });
+        });
+    </script>
+</body>
+</html>

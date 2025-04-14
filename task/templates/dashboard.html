@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="/static/dashboard.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h2>Dashboard</h2>
+
+        <h3>Tasks</h3>
+        <table id="tasksTable">
+            <tr><th>Title</th><th>Status</th><th>Deadline</th></tr>
+            {% for task in tasks %}
+                <tr>
+                    <td>{{ task.title }}</td>
+                    <td>{{ task.status }}</td>
+                    <td>{{ task.deadline }}</td>
+                </tr>
+            {% endfor %}
+        </table>
+
+        <h3>Teams</h3>
+        <table id="teamsTable">
+            <tr><th>Team Id</th><th>Team Name</th></tr>
+            {% for team in teams %}
+                <tr>
+                    <td>{{ team.id }}</td>
+                    <td>{{ team.name }}</td>
+                </tr>
+            {% endfor %}
+        </table>
+
+        <h3>Users</h3>
+        <table id="usersTable">
+            <tr><th>Id</th><th>Email</th></tr>
+            {% for user in users %}
+                <tr>
+                    <td>{{ user.id }}</td>
+                    <td>{{ user.email }}</td>
+                </tr>
+            {% endfor %}
+        </table>
+
+        <button class="logout-btn" id="logout">Logout</button>
+    </div>
+
+    <script>
+        // Check if the user is authenticated by the presence of access token
+        $(document).ready(function() {
+            let accessToken = localStorage.getItem("access_token");
+
+            // If no access token found, redirect to login page
+            if (!accessToken) {
+                alert("Session expired. Please log in again.");
+                window.location.href = "/login"; // Redirect to the login page
+                return;
+            }
+
+            // Fetch tasks, teams, and users associated with the authenticated organization
+            $.ajax({
+                url: "http://127.0.0.1:8000/organization/dashboard", // Your API URL
+                type: "GET",
+                headers: { "Authorization": "Bearer " + accessToken },
+                success: function(data) {
+                    // Populate the dashboard tables with the fetched data
+                    const tasksTable = $("#tasksTable");
+                    const teamsTable = $("#teamsTable");
+                    const usersTable = $("#usersTable");
+
+                    // Add rows to the tasks table
+                    data.tasks.forEach(task => {
+                        tasksTable.append(`<tr><td>${task.title}</td><td>${task.status}</td><td>${task.deadline}</td></tr>`);
+                    });
+
+                    // Add rows to the teams table
+                    data.teams.forEach(team => {
+                        teamsTable.append(`<tr><td>${team.id}</td><td>${team.name}</td></tr>`);
+                    });
+
+                    // Add rows to the users table
+                    data.users.forEach(user => {
+                        usersTable.append(`<tr><td>${user.id}</td><td>${user.email}</td></tr>`);
+                    });
+                },
+                error: function(xhr) {
+                    console.error("Error fetching dashboard data:", xhr);
+                    alert("Unable to fetch dashboard data. Please try again.");
+                }
+            });
+
+            // Handle logout
+            $("#logout").click(function() {
+                localStorage.removeItem("access_token"); // Remove the JWT token
+                window.location.href = "/login"; // Redirect to login page
+            });
+        });
+    </script>
+</body>
+</html>

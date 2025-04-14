@@ -1,17 +1,21 @@
 from fastapi import APIRouter, status, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..database import get_db
+from fastapi.templating import Jinja2Templates
 from ..models import User, Task, Team, TaskStatus, TeamMembership
 from ..auth import get_current_user
+from ..schemas import UserOut
+from fastapi.responses import HTMLResponse
 
 router = APIRouter(tags=["Dashboard"])
-
+templates = Jinja2Templates(directory="task/templates")
 
 @router.get("/dashboard/user-dashboard")
 def user_dashboard(db: Session = Depends(get_db), 
         current_user: User = Depends(get_current_user)):
     
     """
+        Access: Current user
         Retrieves the user dashboard with an overview of tasks.
         Method: GET
         Response: All the records shows from assigned tasks, created tasks, review tasks.
@@ -56,9 +60,9 @@ def admin_dashboard(db:Session = Depends(get_db),
     total_user = db.query(User).count()
     total_team = db.query(Team).count()
 
-    recent_tasks = db.query(Task).order_by(Task.created_at.desc()).limit(5).all()
-    recent_users = db.query(User).order_by(User.id.desc()).limit(5).all()
-    recent_teams = db.query(Team).order_by(Team.id.desc()).limit(5).all()
+    recent_tasks = db.query(Task).order_by(Task.created_at.desc()).all()
+    recent_users = db.query(User).order_by(User.id.desc()).all()
+    recent_teams = db.query(Team).order_by(Team.id.desc()).all()
 
 
     all_data={
@@ -117,4 +121,24 @@ def team_dashboard(team_id: int, db:Session = Depends(get_db),
         "awaiting_assigned_tasks": awaiting_assigned_tasks
     }
     
+    return all_data
+
+
+@router.get("/organization/dashboard",)
+async def dashboard_page(db:Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Ensure that the user has an organization_id and is the admin of that organization
+    if not current_user.organization_id:
+        raise HTTPException(status_code=403, detail="User not part of any organization")
+
+    # Fetch data for the current user's organization
+    # Users, tasks, and teams are all filtered by the organization_id of the logged-in user
+    users = db.query(User).filter(User.organization_id == current_user.organization_id).all()
+    tasks = db.query(Task).filter(Task.organization_id == current_user.organization_id).all()
+    teams = db.query(Team).filter(Team.organization_id == current_user.organization_id).all()
+
+    all_data = {
+        "users": users,
+        "tasks": tasks,
+        "teams": teams
+    }
     return all_data

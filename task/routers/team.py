@@ -19,12 +19,15 @@ def create_team(team: TeamCreate,db: Session = Depends(get_db),
         Method: POST
         Response: Returns a success message and the created team's details if the team is successfully created.
     """
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized to create team")
+    
     exist_team = db.query(Team).filter(Team.name == team.name).first()
     if exist_team:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="Team with this name already exist")
     
-    new_team = Team(name=team.name)
+    new_team = Team(name=team.name,organization_id =team.organization_id)
     db.add(new_team)
     db.commit()
     db.refresh(new_team)
@@ -48,21 +51,24 @@ def add_team_member(team_id: int,
     """
     
     try:
+        if current_user.role != "admin":
+            raise HTTPException(status_code=403, detail="Not authorized to Add team Member")
+    
         team = db.query(Team).filter(Team.id == team_id).first()
 
         if not team:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Team not found")
 
         user = db.query(User).filter(User.id == request.user_id).first()
-        role = db.query(Role).filter(Role.id == request.role_id).first()
+        # role = db.query(Role).filter(Role.id == request.role_id).first()
 
-        if not user or not role:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user or role ID")
+        # if not user or not role:
+        #     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user or role ID")
 
         if db.query(TeamMembership).filter(TeamMembership.user_id == user.id, TeamMembership.team_id == team.id).first():
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is already a member of the team")
 
-        new_membership = TeamMembership(user_id=user.id, team_id=team.id, role_id=role.id)
+        new_membership = TeamMembership(user_id=user.id, team_id=team.id)
         db.add(new_membership)
         db.commit()
 
@@ -87,7 +93,8 @@ def remove_member(team_id:int, request: TeamRemoveMember, db:Session=Depends(get
             Method: DELETE
             Response: Returns a success message if the user is removed from the team.
         """
-    
+        if current_user.role != "admin":
+            raise HTTPException(status_code=403, detail="Not authorized to Reamove team Member")
         # breakpoint()
         team = db.query(Team).filter(Team.id == team_id).first()
 

@@ -9,9 +9,11 @@ from fastapi.security import OAuth2PasswordBearer
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 
-SECRET_KEY = "your_secret_key"  
+SECRET_KEY = "your_secret_key" 
+REFRESH_SECRET_KEY = "your_refresh_secret" 
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60  
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 
+REFRESH_TOKEN_EXPIRE_DAYS = 7 
 
 # Function to create an access token
 def create_access_token(data: dict, expires_delta: timedelta = None):
@@ -19,6 +21,13 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     expire = datetime.utcnow() + (expires_delta if expires_delta else timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def create_refresh_token(data: dict, expires_delta: timedelta = None):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta or timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, REFRESH_SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
 async def verify_jwt_token(token: str):

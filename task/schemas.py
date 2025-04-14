@@ -4,8 +4,12 @@ from datetime import datetime
 from typing import Optional, List
 from pydantic import constr
 
+
+class OrganizationCreate(BaseModel):
+    name : str
+    
 class UserBase(BaseModel):
-    username: str
+    # username: str
     email: EmailStr
 
 class UserLogin(BaseModel):
@@ -14,21 +18,44 @@ class UserLogin(BaseModel):
 
 class Token(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str
+    message: str
+    
 
-class UserCreate(UserBase):
+class SuperUserCreate(BaseModel):
+    email: EmailStr
     password: str
-
+class UserCreate(UserBase):
+    # username: str
+    email: EmailStr
+    password: str
+    role: Optional[str] = "Member"
+    organization_id: int
+    
 class UserOut(UserBase):
     id: int
+    # username: str
+    email: str
+    role: str  # Include role in response
     
+
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+    
 
+class PermissionSchema(BaseModel):
+    user_id: int
+    read: Optional[bool] = False  # Default to False
+    write: Optional[bool] = False
+    update: Optional[bool] = False
+
+    class from_attributes:
+        orm_mode = True  # Enables ORM support
 class TeamMemberAddRequest(BaseModel):
     user_id: int
-    role_id: int
+    # role_id: int
 class ResponseMessage(BaseModel):
     message: str
 class TeamRemoveMember(BaseModel):
@@ -42,6 +69,7 @@ class TaskCreate(BaseModel):
     deadline: datetime
     reviewer_id: Optional[int] = None
     assignee_id: Optional[int] = None
+    organization_id: int
 
 class TaskOut(BaseModel):
     id: int
@@ -54,9 +82,11 @@ class TaskOut(BaseModel):
     team_id: int
     reviewer_id: Optional[int]  # Allow None values
     assignee_id: Optional[int]
+    organization_id: int
 
 class TeamCreate(BaseModel):
     name: str
+    organization_id: int
 
 class TeamResponse(BaseModel):
     message: str
@@ -92,6 +122,7 @@ class DeleteTaskRequest(BaseModel):
 #     status: str
 #     priority: str
 #     deadline: datetime
+
 
 # class UserDashboardResponse(BaseModel):
 #     user_id: int

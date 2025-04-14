@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assign Permissions</title>
+    <link rel="stylesheet" href="/static/permissions.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+
+    <div class="container">
+        <h2>Assign Permissions</h2>
+
+        <label for="user_id">Select User:</label>
+        <select id="user_id">
+            <option value="">Loading users...</option>
+        </select>
+
+        <div class="permissions">
+            <label><input type="checkbox" id="read" class="permission"> Read</label>
+            <label><input type="checkbox" id="write" class="permission"> Write</label>
+            <label><input type="checkbox" id="update" class="permission"> Update</label>
+        </div>
+
+        <button id="assign_permission">Assign Permission</button>
+        <p id="response"></p>
+        <button class="logout-btn" id="logout">Logout</button>
+    </div>
+
+    <script>
+    $(document).ready(function () {
+        let accessToken = localStorage.getItem("access_token");
+
+        // 🔹 Check if user is authenticated
+        if (!accessToken) {
+            alert("Session expired. Please log in again.");
+            window.location.href = "/admin/login";
+            return;
+        }
+        
+        // 🔹 Fetch Users from Database
+        function fetchUsers() {
+            $.ajax({
+                url: "http://127.0.0.1:8000/users",
+                type: "GET",
+                headers: { "Authorization": "Bearer " + accessToken },
+                success: function (users) {
+                    $("#user_id").empty().append('<option value="">Select a user</option>');
+                    users.forEach(user => {
+                        $("#user_id").append(`<option value="${user.id}">${user.email}</option>`);
+                    });
+                },
+                error: function (xhr) {
+                    console.error("Fetch Users Error:", xhr);
+                    alert("Error fetching users. Please refresh the page.");
+                }
+            });
+        }
+
+        fetchUsers();
+
+        // 🔹 Assign Permissions
+        $("#assign_permission").click(function () {
+            let userId = $("#user_id").val();
+            if (!userId) {
+                alert("Please select a user.");
+                return;
+            }
+
+            let permissions = {
+                read: $("#read").is(":checked"),
+                write: $("#write").is(":checked"),
+                update: $("#update").is(":checked")
+            };
+
+            $.ajax({
+                url: "http://127.0.0.1:8000/assign-permission",
+                type: "POST",
+                contentType: "application/json",
+                headers: { "Authorization": "Bearer " + accessToken },
+                data: JSON.stringify({ user_id: parseInt(userId), ...permissions }),
+                success: function (response) {
+                    $("#response").text(response.message).css("color", "green");
+                },
+                error: function (xhr) {
+                    $("#response").text(xhr.responseJSON.detail).css("color", "red");
+                }
+            });
+        });
+    });
+    document.getElementById("logout").addEventListener("click", function() {
+        localStorage.removeItem("token"); // Remove the JWT token
+        window.location.href = "/admin/login"; // Redirect to the admin-login page
+    });
+    </script>
+</body>
+</html>

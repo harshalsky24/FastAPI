@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Task Updates</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; }
+        #activity-log { width: 80%; margin: auto; border: 1px solid #ddd; padding: 10px; height: 300px; overflow-y: auto; }
+        .log-entry { padding: 5px; border-bottom: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <h2>Live Task Updates</h2>
+    <div id="activity-log"></div>
+
+    <script>
+        let socket = new WebSocket("ws://localhost:8000/ws/notifications/{user_id}"); // Replace with actual user ID
+
+        socket.onmessage = function(event) {
+            let log = document.getElementById("activity-log");
+            let message = document.createElement("div");
+            message.classList.add("log-entry");
+            message.textContent = event.data;
+            log.appendChild(message);
+            log.scrollTop = log.scrollHeight; // Auto-scroll to latest update
+        };
+
+        socket.onopen = function() { console.log("Connected to WebSocket"); };
+        socket.onclose = function() { console.log("Disconnected from WebSocket"); };
+    </script>
+</body>
+</html>
